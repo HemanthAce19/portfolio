@@ -4,26 +4,21 @@ import { useEffect, useRef } from "react";
 
 // Animated spine-leaf network fabric: every leaf switch connects to every
 // spine, and packets travel leaf -> spine -> leaf. Hover a switch to light up
-// its links.
+// its links. Colours come from CSS variables so the design tokens stay in CSS.
 
 const SPINES = 3;
 const LEAVES = 6;
-const PACKETS = 9;
+const PACKETS = 12;
 
 type Point = { x: number; y: number };
 type Packet = { from: number; via: number; to: number; t: number; speed: number };
+type Hover = { kind: "spine" | "leaf"; index: number } | null;
 
 function newPacket(): Packet {
   const from = Math.floor(Math.random() * LEAVES);
   let to = Math.floor(Math.random() * (LEAVES - 1));
   if (to >= from) to += 1; // never route back to the source leaf
-  return {
-    from,
-    to,
-    via: Math.floor(Math.random() * SPINES),
-    t: 0,
-    speed: 0.006 + Math.random() * 0.006,
-  };
+  return { from, to, via: Math.floor(Math.random() * SPINES), t: 0, speed: 0.006 + Math.random() * 0.006 };
 }
 
 export default function FabricCanvas() {
@@ -35,10 +30,17 @@ export default function FabricCanvas() {
     if (!canvas || !ctx) return;
 
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const packets = Array.from({ length: PACKETS }, () => ({ ...newPacket(), t: Math.random() * 2 }));
+    const css = getComputedStyle(canvas);
+    const colour = {
+      line: css.getPropertyValue("--fab-line"),
+      hot: css.getPropertyValue("--fab-hot"),
+      packet: css.getPropertyValue("--fab-packet"),
+      node: css.getPropertyValue("--fab-node"),
+    };
+    const packets: Packet[] = Array.from({ length: PACKETS }, () => ({ ...newPacket(), t: Math.random() * 2 }));
     let spines: Point[] = [];
     let leaves: Point[] = [];
-    let hovered: { kind: "spine" | "leaf"; i: number } | null = null;
+    let hovered: Hover = null;
     let frame = 0;
 
     const layout = () => {
@@ -47,73 +49,74 @@ export default function FabricCanvas() {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      spines = Array.from({ length: SPINES }, (_, i) => ({ x: (width * (i + 1)) / (SPINES + 1), y: height * 0.2 }));
+      spines = Array.from({ length: SPINES }, (_, i) => ({ x: (width * (i + 1)) / (SPINES + 1), y: height * 0.22 }));
       leaves = Array.from({ length: LEAVES }, (_, i) => ({ x: (width * (i + 0.5)) / LEAVES, y: height * 0.8 }));
+    };
+
+    const drawNode = (pt: Point, width: number, lit: boolean) => {
+      ctx.fillStyle = lit ? colour.hot : colour.node;
+      ctx.strokeStyle = colour.line;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(pt.x - width / 2, pt.y - 11, width, 22, 6);
+      ctx.fill();
+      ctx.stroke();
     };
 
     const draw = () => {
       const { width, height } = canvas.getBoundingClientRect();
-      const css = getComputedStyle(canvas);
-      const line = css.getPropertyValue("--line");
-      const accent = css.getPropertyValue("--accent");
-      const surface = css.getPropertyValue("--surface");
       ctx.clearRect(0, 0, width, height);
 
       for (let l = 0; l < LEAVES; l++) {
         for (let s = 0; s < SPINES; s++) {
-          const lit = hovered && (hovered.kind === "leaf" ? hovered.i === l : hovered.i === s);
-          ctx.strokeStyle = lit ? accent : line;
-          ctx.lineWidth = lit ? 1.5 : 1;
+          const lit = hovered !== null && (hovered.kind === "leaf" ? hovered.index === l : hovered.index === s);
+          ctx.strokeStyle = lit ? colour.hot : colour.line;
+          ctx.globalAlpha = lit ? 1 : 0.45;
+          ctx.lineWidth = lit ? 2.5 : 1.5;
           ctx.beginPath();
           ctx.moveTo(leaves[l].x, leaves[l].y);
           ctx.lineTo(spines[s].x, spines[s].y);
           ctx.stroke();
         }
       }
+      ctx.globalAlpha = 1;
 
-      ctx.fillStyle = accent;
+      ctx.fillStyle = colour.packet;
       for (const p of packets) {
-        // t runs 0..1 on the uplink, 1..2 on the downlink
+        // t runs 0..1 on the uplink and 1..2 on the downlink
         const [a, b, k] = p.t < 1 ? [leaves[p.from], spines[p.via], p.t] : [spines[p.via], leaves[p.to], p.t - 1];
         ctx.beginPath();
-        ctx.arc(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, 3, 0, Math.PI * 2);
+        ctx.arc(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, 5, 0, Math.PI * 2);
         ctx.fill();
         p.t += p.speed;
         if (p.t >= 2) Object.assign(p, newPacket());
       }
 
-      const node = (pt: Point, w: number, lit: boolean) => {
-        ctx.fillStyle = surface;
-        ctx.strokeStyle = lit ? accent : line;
-        ctx.lineWidth = lit ? 2 : 1.5;
-        ctx.beginPath();
-        ctx.roundRect(pt.x - w / 2, pt.y - 9, w, 18, 4);
-        ctx.fill();
-        ctx.stroke();
-      };
-      spines.forEach((pt, i) => node(pt, 54, hovered?.kind === "spine" && hovered.i === i));
-      leaves.forEach((pt, i) => node(pt, 36, hovered?.kind === "leaf" && hovered.i === i));
+      spines.forEach((pt, i) => drawNode(pt, 64, hovered?.kind === "spine" && hovered.index === i));
+      leaves.forEach((pt, i) => drawNode(pt, 40, hovered?.kind === "leaf" && hovered.index === i));
 
       if (!reducedMotion) frame = requestAnimationFrame(draw);
     };
 
+    // With reduced motion there is no animation loop, so redraw on demand.
+    const redrawIfStatic = () => {
+      if (reducedMotion) draw();
+    };
     const onMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const near = (pt: Point) => Math.hypot(pt.x - x, pt.y - y) < 32;
+      const near = (pt: Point) => Math.hypot(pt.x - (e.clientX - rect.left), pt.y - (e.clientY - rect.top)) < 34;
       const s = spines.findIndex(near);
       const l = leaves.findIndex(near);
-      hovered = s >= 0 ? { kind: "spine", i: s } : l >= 0 ? { kind: "leaf", i: l } : null;
-      if (reducedMotion) draw();
+      hovered = s >= 0 ? { kind: "spine", index: s } : l >= 0 ? { kind: "leaf", index: l } : null;
+      redrawIfStatic();
     };
     const onLeave = () => {
       hovered = null;
-      if (reducedMotion) draw();
+      redrawIfStatic();
     };
     const onResize = () => {
       layout();
-      if (reducedMotion) draw();
+      redrawIfStatic();
     };
 
     layout();
