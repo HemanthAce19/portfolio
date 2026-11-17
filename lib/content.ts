@@ -1,11 +1,28 @@
 // All site content lives here, typed, so the components stay presentational.
+// The "ask this page" search index in lib/search.ts is built from this file too.
+
+export const site = {
+  name: "Hemanth Pandiyaraj",
+  role: "AI and Full-Stack Developer",
+  location: "Edmonton, AB",
+  url: "https://portfolio-hemanth-pandiyaraj.vercel.app",
+} as const;
 
 export const links = {
   github: "https://github.com/HemanthAce19",
   linkedin: "https://www.linkedin.com/in/hemanthpandiyaraj",
   email: "hemanthpandiyaraj@gmail.com",
   resume: "/Hemanth_Pandiyaraj_Resume.pdf",
+  source: "https://github.com/HemanthAce19/portfolio",
 } as const;
+
+export const about =
+  "I'm Hemanth, a developer in Edmonton. I spent two years at Deloitte building full-stack web applications for government and enterprise clients, then completed an MSc at the University of Alberta. Now I build retrieval systems, LLM tooling and the services behind them.";
+
+export const lookingFor =
+  "I'm looking for a developer role working on AI products or the systems behind them.";
+
+export type Demo = "ask" | "bucket" | "feed";
 
 export type Project = {
   title: string;
@@ -14,7 +31,9 @@ export type Project = {
   flow: string[];
   points: string[];
   tags: string[];
+  tests: number;
   proof: { value: string; label: string }[];
+  demo: Demo;
 };
 
 export const projects: Project[] = [
@@ -30,10 +49,12 @@ export const projects: Project[] = [
       "The index records which embedding model built it, which prevents silently wrong results from a model mismatch.",
     ],
     tags: ["Python", "Embeddings", "Vector search", "LLM API", "MCP", "pytest"],
+    tests: 16,
     proof: [
       { value: "2", label: "ways in: a command line and an MCP server, sharing one retrieval core" },
       { value: "16", label: "tests, including an end-to-end MCP client call" },
     ],
+    demo: "ask",
   },
   {
     title: "Rate-Limited API Gateway",
@@ -47,10 +68,12 @@ export const projects: Project[] = [
       "Fails open or closed, by configuration, when Redis is down.",
     ],
     tags: ["Python", "FastAPI", "asyncio", "Redis", "JWT", "Docker", "GitHub Actions"],
+    tests: 47,
     proof: [
       { value: "10 / 200", label: "simultaneous requests let through for a 10-per-minute user. Exactly the limit, every run." },
       { value: "47", label: "tests, including Redis outages" },
     ],
+    demo: "bucket",
   },
   {
     title: "Real-Time Market Data Pipeline",
@@ -64,17 +87,22 @@ export const projects: Project[] = [
       "Slow WebSocket clients get bounded queues instead of stalling everyone else.",
     ],
     tags: ["Python", "asyncio", "Redis Streams", "Celery", "pandas", "WebSocket", "Docker"],
+    tests: 72,
     proof: [
       { value: "1 s", label: "metric refresh over a 5-minute rolling window" },
       { value: "72", label: "tests, none needing the live exchange" },
     ],
+    demo: "feed",
   },
 ];
 
-export type Role = { when: string; title: string; org: string; points: string[] };
+export const totalTests = projects.reduce((sum, project) => sum + project.tests, 0);
+
+export type Role = { id: string; when: string; title: string; org: string; points: string[] };
 
 export const roles: Role[] = [
   {
+    id: "deloitte",
     when: "2022 to 2024",
     title: "Analyst, Full Stack Developer",
     org: "Deloitte",
@@ -86,19 +114,20 @@ export const roles: Role[] = [
     ],
   },
   {
+    id: "teaching",
     when: "2026",
-    title: "Graduate Teaching Assistant, Computer Networks",
+    title: "Graduate Teaching Assistant",
     org: "University of Alberta",
     points: [
-      "Wrote Python autograding scripts and starter code for socket programming labs used by 90 students.",
-      "Debugged student Python and C code live, and ran weekly labs on protocol design and packet analysis.",
+      "Wrote Python autograding scripts and starter code for programming labs used by 90 students.",
+      "Debugged student Python and C code live across Windows, macOS and Linux, and ran weekly labs and office hours.",
     ],
   },
 ];
 
-export const education: { degree: string; school: string }[] = [
-  { degree: "MSc, Internetworking", school: "University of Alberta, 2024 to 2026" },
-  { degree: "Bachelor of Computer Applications", school: "Sri Krishna College of Technology, 2019 to 2022" },
+export const education: { degree: string; school: string; when: string }[] = [
+  { degree: "Master of Science (MSc)", school: "University of Alberta", when: "2024 to 2026" },
+  { degree: "Bachelor of Computer Applications", school: "Sri Krishna College of Technology", when: "2019 to 2022" },
 ];
 
 export const skills: { group: string; items: string[] }[] = [
@@ -110,3 +139,6 @@ export const skills: { group: string; items: string[] }[] = [
   { group: "Delivery", items: ["Docker", "GitHub Actions", "Azure DevOps", "Azure", "pytest", "Git"] },
   { group: "Security", items: ["OWASP Top 10", "JWT auth", "RBAC"] },
 ];
+
+/** Stable DOM id for a skills row, shared by the page and the search index. */
+export const skillAnchor = (group: string) => `skills-${group.toLowerCase().replace(/\s+/g, "-")}`;
